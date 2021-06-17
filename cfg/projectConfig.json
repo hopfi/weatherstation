@@ -1,0 +1,84 @@
+{
+    "projectConfig": {
+        "general": {
+            "projectName": "weatherstation",
+            "swProjectName": "wstat",
+            "vendor": "xilinx",
+            "topLevelName": "top_module",
+            "testbenchName": "top_module_tb",
+            "outputFilesName": "outFiles",
+            "autogenerateBitstream": false,
+            "vhdlStandard": "2008",
+            "svStandard": "",
+            "runImpl": false
+        },
+        "xilinx": {
+            "vivadoVersion": "2020.2",
+            "fpgaPart": "xc7a100tcsg324-2",
+            "implStrat": "",
+            "IPIntegrator": {
+                "blockDesignFiles": {
+                    "designs": [
+                    ]
+                }
+            },
+            "IPPackager": {
+                "configFile": "",
+                "packageIP": false,
+                "genereateIP": false,
+                "synthCheck": false
+            }
+        },
+        "intel": {
+            "quartusVersion": "19.1",
+            "familyName": "MAX 10",
+            "deviceName": "10M08SAU169C8G",
+            "implStrat": "path/to/tcl/file",
+            "genereateIP": false,
+            "synthCheck": false
+        }
+    },
+    "projectVersion": {
+        "major": 0,
+        "minor": 0,
+        "patch": 1,
+        "userdata": "This is text1!"
+    },
+    "hdl": {
+        "vhdl": [
+            { "path": "vhdl/weatherstation/top_module/top_module.vhd", "library": "wstat" },
+            { "path": "vhdl/weatherstation/top_module/top_module_tb.vhd", "library": "wstat" },
+            { "path": "vhdl/weatherstation/bme280_controller/bme280_ctrl.vhd", "library": "wstat" },
+            { "path": "vhdl/weatherstation/iic_lcd_controller/iic_lcd_ctrl.vhd", "library": "wstat" },
+            { "path": "vhdl/weatherstation/dataflow_master/dataflow_master.vhd", "library": "wstat" },
+            { "path": "vhdl/weatherstation/lcd_controller/lcd_ctrl.vhd", "library": "wstat" },
+            { "path": "vhdl/generic/bin2BCD/binary_to_BCD.vhd", "library": "gen" },
+            { "path": "vhdl/generic/hd44780_driver/hd44780_ctrl.vhd", "library": "gen" },
+            { "path": "vhdl/generic/i2c_master/i2c_master.vhd", "library": "gen" },
+            { "path": "vhdl/generic/lcd_driver/lcd_driver.vhd", "library": "gen" }
+        ],
+        "sv": [ 
+        ]
+    },
+    "constraints": {
+        "xilinx": [
+        ],
+        "intel": [
+            "vhdl/weatherstation/top_module/top_module_timing.sdc",
+            "vhdl/weatherstation/top_module/top_module_pinout.sdc"
+        ]
+    },
+    "ip": {
+        "xilinx": [
+        ],
+        "intel": [
+            {"path": "vhdl/weatherstation/ip/intel/weatherstation/dbg_signaltap_01", "name": "dbg_signaltap_01.qsys"},
+            {"path": "vhdl/weatherstation/ip/intel/weatherstation/sys_pll", "name": "sys_pll.qip"}
+        ],
+        "3rdParty": [
+        ]
+    },
+    "misc": {
+
+    }
+}
