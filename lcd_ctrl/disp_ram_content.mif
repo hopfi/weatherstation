@@ -1,0 +1,49 @@
+WIDTH=10;
+DEPTH=64;
+ADDRESS_RADIX=HEX;
+DATA_RADIX=BIN;
+
+CONTENT BEGIN
+
+00 : 0000000001; --! 00: Clear display
+01 : 0010000000; --! 01: Set DDRAM addr x00
+02 : 1001010100; --! 02: Write: T x54
+03 : 1001100101; --! 03: Write: e
+04 : 1001101101; --! 04: Write: m
+05 : 1001110000; --! 05: Write: p
+06 : 1000100000; --! 06: Write: Space
+07 : 1000100011; --! 06: Write: T Sign
+08 : 1000100011; --! 06: Write: T DATA1
+09 : 1000100011; --! 07: Write: T DATA2
+0A : 1000101110; --! 08: Write: .
+0B : 1000100011; --! 08: Write: T DATA3
+0C : 1000100000; --! 09: Write: Space
+0D : 1011011111; --! 10: Write: °
+0E : 1001000011; --! 11: Write: C
+0F : 0011000000; --! 12: Set DDRAM addr x40
+10 : 1001010000; --! 13: Write: P
+11 : 1001110010; --! 14: Write: r
+12 : 1001100101; --! 15: Write: e
+13 : 1001110011; --! 16: Write: s
+14 : 1000100000; --! 17: Write: Space
+15 : 1000100011; --! 18: Write: P DATA1
+16 : 1000100011; --! 19: Write: P DATA2
+17 : 1000100011; --! 20: Write: P DATA3
+18 : 1000100011; --! 21: Write: P DATA4
+19 : 1000100011; --! 22: Write: P DATA5
+1A : 1000100011; --! 23: Write: P DATA6
+1B : 1000100000; --! 24: Write: Space
+1C : 1001010000; --! 25: Write: P
+1D : 1001100001; --! 26: Write: a
+1E : 0010010100; --! 27: Set DDRAM addr x14
+1F : 1001001000; --! 28: Write: H
+20 : 1001110101; --! 29: Write: u
+21 : 1001101101; --! 30: Write: m
+22 : 1000100000; --! 31: Write: Space
+23 : 1000100000; --! 32: Write: Space
+24 : 1000100011; --! 33: Write: H DATA1
+25 : 1000100011; --! 34: Write: H DATA2
+26 : 1000100101; --! 35: Write: %
+
+[27..3F]  :   0000000000;
+END;

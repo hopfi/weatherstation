@@ -9,18 +9,14 @@ library wstat;
 
 entity top_module is
     port(
-        clk12m      : in  std_logic;
-        usr_btn     : in  std_logic;
-        buttons     : in  std_logic_VECTOR(7 downto 0);
-        led         : out std_logic_VECTOR(7 downto 0) := (others => '0');
-        rs          : out std_logic;
-        rw          : out std_logic;
-        e           : out std_logic;
-        data        : out std_logic_VECTOR(7 downto 0);
+        input_clk   : in  std_logic;
+        user_rst    : in  std_logic;
         sensor_sda  : inout std_logic;
-        sensor_scl  : inout std_logic
-        --lcd_sda                : inout std_logic;
-        --lcd_scl                : inout std_logic
+        sensor_scl  : inout std_logic;
+        en          : out std_logic;
+        rw          : out std_logic;
+        rs          : out std_logic;
+        lcd_data    : inout std_logic_vector(7 downto 0)
     );
 end entity top_module;
  
@@ -30,6 +26,7 @@ architecture struct of top_module is
     signal sys_clk   : std_logic;
     signal sys_rst   : std_logic;
     signal sys_rst_n : std_logic;
+    signal sys_rst_n_temp : std_logic;
 
     component sys_pll
     port (
@@ -39,16 +36,9 @@ architecture struct of top_module is
     );
     end component;
 
-    component dbg_signaltap_01 is
-    port (
-        acq_clk        : in std_logic                     := 'X';             -- clk
-        acq_data_in    : in std_logic_vector(23 downto 0) := (others => 'X'); -- acq_data_in
-        acq_trigger_in : in std_logic_vector(15 downto 0) := (others => 'X')  -- acq_trigger_in
-    );
-    end component dbg_signaltap_01;
-
-    constant i2c_input_clk : integer range 0 to 100000000 := 10000000;
-    constant i2c_bus_clk   : integer range 0 to 100000000 := 500000;
+    constant C_SYS_CLK_FREQ : integer range 0 to 100000000 := 10000000;
+    constant C_I2C_CLK_FREQ : integer range 0 to 100000000 := 400000;
+    constant C_HD44780_CLK_FREQ : integer := 400000;
     constant bin_width     : positive range 1 to 64 := 21;
     constant bcd_width     : positive range 1 to 64 := 10;
     
@@ -58,138 +48,199 @@ architecture struct of top_module is
     signal lcd_bus    : std_logic_VECTOR(9 DOWNTO 0);
     signal lcd_busy   : std_logic;
     
-    signal sensor_ena       : std_logic;
-    signal sensor_addr      : std_logic_vector(6 downto 0);
-    signal sensor_rw        : std_logic;
-    signal sensor_data_wr   : std_logic_vector(7 downto 0);
-    signal sensor_busy      : std_logic;
-    signal sensor_data_rd   : std_logic_vector(7 downto 0);
-    signal sensor_ack_error : std_logic;
+    signal scl_out          : std_logic;
+    signal scl_in           : std_logic;
+    signal scl_tri          : std_logic;
+    signal sda_out          : std_logic;
+    signal sda_in           : std_logic;
+    signal sda_tri          : std_logic;
+    signal I2CMaster_BME280ctrl_sensor_en        : std_logic;
+    signal I2CMaster_BME280ctrl_sensor_busy      : std_logic;
+    signal I2CMaster_BME280ctrl_sensor_ack_error : std_logic;
+    signal I2CMaster_BME280ctrl_sensor_stop_mode : std_logic_vector(1 downto 0);
+    signal I2CMaster_BME280ctrl_sensor_wr_data   : std_logic_vector(7 downto 0);
+    signal I2CMaster_BME280ctrl_sensor_wr_en     : std_logic;
+    signal I2CMaster_BME280ctrl_sensor_sending   : std_logic;
+    signal I2CMaster_BME280ctrl_sensor_rd_data   : std_logic_vector(7 downto 0);
+    signal I2CMaster_BME280ctrl_sensor_rd_en     : std_logic;
+    signal I2CMaster_BME280ctrl_sensor_receiving : std_logic;
 
-    signal start_meas     : std_logic;
-    signal bin_data_temp  : std_logic_vector(20 downto 0);
-    signal bin_data_hum   : std_logic_vector(20 downto 0);
-    signal bin_data_pres  : std_logic_vector(20 downto 0);
-    signal bin_data_valid : std_logic;
+    signal BME280ctrl_BME280comp_start_meas   : std_logic;
+    signal BME280ctrl_DataConv_bin_data_temp  : std_logic_vector(19 downto 0) := (others => '0');
+    signal BME280ctrl_DataConv_bin_data_pres  : std_logic_vector(19 downto 0) := (others => '0');
+    signal BME280ctrl_DataConv_bin_data_hum   : std_logic_vector(15 downto 0) := (others => '0');
+    signal BME280ctrl_DataConv_bin_data_valid : std_logic := '0';
 
-    signal cnv            : std_logic;
-    signal bin_data       : std_logic_vector(20 downto 0);
-    signal bcd_data       : std_logic_Vector(20 downto 0) := (others => '0');
-    signal bcd_data_valid : std_logic;
-    
-    signal test : std_logic_vector(39 downto 0) := (others => '0');
-    
-    signal dbg_ack_data    : std_logic_vector(23 downto 0);
-    signal dbg_ack_trigger : std_logic_vector(15 downto 0);
+    signal BIN2BCD_LCDctrl_bcd_temp  : std_logic_vector(7 downto 0);
+    signal BIN2BCD_LCDctrl_bcd_pres  : std_logic_vector(7 downto 0);
+    signal BIN2BCD_LCDctrl_bcd_hum   : std_logic_vector(7 downto 0);
+    signal BIN2BCD_LCDctrl_bcd_valid : std_logic;
+    signal BIN2BCD_LCDctrl_bcd_busy  : std_logic;
+    signal LCDCtrl_DISP_lcd_start : std_logic_vector(7 downto 0);
+    signal LCDCtrl_DISP_lcd_busy  : std_logic_vector(7 downto 0);
+    signal LCDCtrl_DISP_lcd_rw    : std_logic_vector(7 downto 0);
+    signal LCDCtrl_DISP_lcd_rs    : std_logic_vector(7 downto 0);
+    signal LCDCtrl_DISP_lcd_data  : std_logic_vector(7 downto 0);
+    signal lcd_data_out  : std_logic_vector(7 downto 0);
+    signal lcd_data_in   : std_logic_vector(7 downto 0);
+    signal lcd_data_tri  : std_logic_vector(7 downto 0);
+
+    signal LCDCtrl_DISPdrv_start     : std_logic;
+    signal LCDCtrl_DISPdrv_busy      : std_logic;
+    signal LCDCtrl_DISPdrv_disp_rw   : std_logic;
+    signal LCDCtrl_DISPdrv_disp_rs   : std_logic;
+    signal LCDCtrl_DISPdrv_disp_data : std_logic_vector(7 downto 0);
+
+    signal DataConv_LCDctrl_bcd_temp_sgn : std_logic;
+    signal DataConv_LCDctrl_bcd_temp     : std_logic_vector(11 downto 0);
+    signal DataConv_LCDctrl_bcd_pres     : std_logic_vector(23 downto 0);
+    signal DataConv_LCDctrl_bcd_hum      : std_logic_vector(7 downto 0);
+    signal DataConv_LCDctrl_bcd_valid    : std_logic;
+    signal DataConv_LCDctrl_bcd_busy     : std_logic;
+
+    constant C_START_THRESHOLD : unsigned(31 downto 0) := x"000E_BC20"; --update every second
+    signal timer : unsigned(31 downto 0);
 
 begin
 
     sys_pll_inst : sys_pll 
     port map (
-        inclk0 => clk12m,
+        inclk0 => input_clk,
         c0     => sys_clk,
         locked => locked
     );
     sys_rst <= locked;
-    sys_rst_n <= not locked;
-    
-    ----instantiate the lcd controller
-    --lcd_driver_inst : entity gen.lcd_driver(controller)
-    --port map(
-    --    clk        => sys_clk,
-    --    reset_n    => '1',
-    --    lcd_enable => lcd_enable,
-    --    lcd_bus    => lcd_bus,
-    --    busy       => lcd_busy,
-    --    rw         => rw,
-    --    rs         => rs,
-    --    e          => e,
-    --    lcd_data   => data
-    --);
-    --
-    --lcd_ctrl_inst : entity wstat.lcd_ctrl(rtl)
-    --port map(
-    --    clk            => sys_clk,
-    --    reset_n        => '1',
-    --    bcd_data       => test,
-    --    bcd_data_valid => bcd_data_valid,
-    --    lcd_bus        => lcd_bus,
-    --    lcd_enable     => lcd_enable,
-    --    lcd_busy       => lcd_busy
-    --);
-    --test(20 downto 0) <= bcd_data;
-    
-    i2c_sensor_inst : entity gen.i2c_master(logic)
+    sys_rst_n_temp <= not locked;
+    sys_rst_n <= sys_rst_n_temp or not user_rst;
+
+    process (sys_clk)
+    begin
+        if rising_edge(sys_clk) then
+            if sys_rst_n = '1' then
+                timer <= (others => '0');
+                BME280ctrl_BME280comp_start_meas <= '0';
+            else
+                BME280ctrl_BME280comp_start_meas <= '0';
+
+                if timer = C_START_THRESHOLD then
+                    BME280ctrl_BME280comp_start_meas <= '1';
+                    timer <= (others => '0');
+                else
+                    timer <= timer + 1;
+                end if;
+            end if;
+        end if;
+    end process;
+
+
+    i2c_sensor_inst : entity gen.i2c_master(rtl)
     generic map (
-        input_clk => i2c_input_clk,         --input clock speed from user logic in Hz
-        bus_clk   => i2c_bus_clk            --speed the i2c bus (scl) will run at in Hz
+        G_SYSTEM_CLOCK => C_SYS_CLK_FREQ, --input clock speed from user logic in Hz
+        G_BAUD_RATE    => C_I2C_CLK_FREQ  --speed the i2c bus (scl) will run at in Hz
     )
     port map (
-        clk       => sys_clk,               --system clock
-        reset_n   => sys_rst_n,             --active low reset
-        ena       => sensor_ena,            --latch in command
-        addr      => sensor_addr,           --address of target slave
-        rw        => sensor_rw,             --'0' is write, '1' is read
-        data_wr   => sensor_data_wr,        --data to write to slave
-        busy      => sensor_busy,           --indicates transaction in progress
-        data_rd   => sensor_data_rd,        --data read from slave
-        ack_error => sensor_ack_error,      --flag if improper acknowledge from slave
-        sda       => sensor_sda,            --serial data output of i2c bus
-        scl       => sensor_scl
+        i_sys_clk   => sys_clk,
+        i_sys_rst   => sys_rst_n,
+        o_scl       => scl_out,
+        i_scl       => scl_in,
+        t_scl       => scl_tri,
+        o_sda       => sda_out,
+        i_sda       => sda_in,
+        t_sda       => sda_tri,
+        i_en        => I2CMaster_BME280ctrl_sensor_en,
+        o_busy      => I2CMaster_BME280ctrl_sensor_busy,
+        o_ack_error => I2CMaster_BME280ctrl_sensor_ack_error,
+        i_stop_mode => I2CMaster_BME280ctrl_sensor_stop_mode,
+        i_wr_data   => I2CMaster_BME280ctrl_sensor_wr_data,
+        i_wr_en     => I2CMaster_BME280ctrl_sensor_wr_en,
+        o_sending   => I2CMaster_BME280ctrl_sensor_sending,
+        o_rd_data   => I2CMaster_BME280ctrl_sensor_rd_data,
+        i_rd_en     => I2CMaster_BME280ctrl_sensor_rd_en,
+        o_receiving => I2CMaster_BME280ctrl_sensor_receiving
     );
-    
-    signaltap_inst : dbg_signaltap_01
-    port map (
-        acq_clk        => sys_clk,
-        acq_data_in    => dbg_ack_data,
-        acq_trigger_in => dbg_ack_trigger
-    );
-    dbg_ack_data <= x"00" & '0' & sensor_rw & sensor_addr & sensor_data_rd;
-    dbg_ack_trigger <= x"000" & "00" & sensor_ena & sensor_busy;
+    sensor_sda <= sda_out when sda_tri = '0' else 'Z';
+    sda_in <= sensor_sda;
+    sensor_scl <= scl_out when scl_tri = '0' else 'Z';
+    scl_in <= sensor_scl;
 
     BME280_ctrl_inst : entity wstat.BME280_ctrl(rtl)
     port map (
-        clk               => sys_clk,
-        reset_n           => sys_rst,
-        start_measurement => start_meas,      --: IN  std_logic;
-        bin_data_temp     => bin_data_temp,   --: OUT std_logic_VECTOR(20 downto 0);
-        bin_data_hum      => bin_data_hum,    --: OUT std_logic_VECTOR(20 downto 0);
-        bin_data_pres     => bin_data_pres,   --: OUT std_logic_VECTOR(20 downto 0);
-        bin_data_valid    => bin_data_valid,  --: OUT std_logic;    
-        ena               => sensor_ena,      --: IN  std_logic;                   
-        addr              => sensor_addr,     --: IN  std_logic_VECTOR(6 DOWNTO 0);
-        rw                => sensor_rw,       --: IN  std_logic;                   
-        data_wr           => sensor_data_wr,  --: IN  std_logic_VECTOR(7 DOWNTO 0);
-        busy              => sensor_busy,     --: OUT std_logic;                   
-        data_rd           => sensor_data_rd,  --: OUT std_logic_VECTOR(7 DOWNTO 0);
-        ack_error         => sensor_acK_error --: IN  std_logic;    
+        i_clk               => sys_clk,
+        i_reset             => sys_rst_n,
+        i_start_measurement => BME280ctrl_BME280comp_start_meas,
+        o_bin_data_temp     => BME280ctrl_DataConv_bin_data_temp,
+        o_bin_data_pres     => open, --BME280ctrl_DataConv_bin_data_pres,
+        o_bin_data_hum      => BME280ctrl_DataConv_bin_data_hum,
+        o_bin_data_valid    => BME280ctrl_DataConv_bin_data_valid,
+        o_en                => I2CMaster_BME280ctrl_sensor_en,
+        i_busy              => I2CMaster_BME280ctrl_sensor_busy,
+        i_ack_error         => I2CMaster_BME280ctrl_sensor_ack_error,
+        o_stop_mode         => I2CMaster_BME280ctrl_sensor_stop_mode,
+        o_wr_data           => I2CMaster_BME280ctrl_sensor_wr_data,
+        o_wr_en             => I2CMaster_BME280ctrl_sensor_wr_en,
+        i_sending           => I2CMaster_BME280ctrl_sensor_sending,
+        i_rd_data           => I2CMaster_BME280ctrl_sensor_rd_data,
+        o_rd_en             => I2CMaster_BME280ctrl_sensor_rd_en,
+        i_receiving         => I2CMaster_BME280ctrl_sensor_receiving
     );
-    --
-    --bin2BDC_inst : entity gen.binary_to_BCD(rtl)
-    --generic map (
-    --    g_INPUT_WIDTH    => bin_width, 
-    --    g_DECIMAL_DIGITS => bcd_width
-    --)
-    --port map (
-    --    i_Clock  => sys_clk, 
-    --    i_Start  => cnv, 
-    --    i_Binary => bin_data, 
-    --    o_BCD    => open,
-    --    o_DV     => bcd_data_valid
-    --);
-    --
-    --dataflow_master_inst : entity wstat.dataflow_master(rtl)
-    --port map (
-    --    clk      => sys_clk,
-    --    reset_n  => '1'
-    --);
-    --
-    --led(1) <= '0' when buttons(1) = '1' else '1';
-    --led(2) <= '0' when buttons(2) = '1' else '1';
-    --led(3) <= '0' when buttons(3) = '1' else '1';
-    --led(4) <= '0' when buttons(4) = '1' else '1';
-    --led(5) <= '0' when buttons(5) = '1' else '1';
-    --led(6) <= '0' when buttons(6) = '1' else '1';
-    --led(7) <= '0' when buttons(7) = '1' else '1';
-    
+
+    data_conv : entity wstat.data_converter(struct)
+    port map (
+        i_clk            => sys_clk,
+        i_rst            => sys_rst_n,
+        i_bin_data_temp  => BME280ctrl_DataConv_bin_data_temp,
+        i_bin_data_pres  => BME280ctrl_DataConv_bin_data_pres,
+        i_bin_data_hum   => BME280ctrl_DataConv_bin_data_hum,
+        i_bin_data_valid => BME280ctrl_DataConv_bin_data_valid,
+        o_bcd_temp_sgn   => DataConv_LCDctrl_bcd_temp_sgn,
+        o_bcd_temp       => DataConv_LCDctrl_bcd_temp,
+        o_bcd_pres       => open, --DataConv_LCDctrl_bcd_pres,
+        o_bcd_hum        => DataConv_LCDctrl_bcd_hum,
+        o_bcd_valid      => DataConv_LCDctrl_bcd_valid,
+        i_bcd_busy       => DataConv_LCDctrl_bcd_busy
+    );
+
+    lcd_ctrl_inst : entity wstat.lcd_ctrl(rtl)
+    generic map (
+        G_DISP_RAM_FILE => "X:/Daniel/dev_docs/fpga/vhdl/weatherstation/lcd_ctrl/disp_ram_content.mif"
+    )
+    port map(
+        i_clk           => sys_clk,
+        i_rst           => sys_rst_n,
+        i_bcd_temp_sign => DataConv_LCDctrl_bcd_temp_sgn,
+        i_bcd_temp      => DataConv_LCDctrl_bcd_temp,
+        i_bcd_pres      => DataConv_LCDctrl_bcd_pres,
+        i_bcd_hum       => DataConv_LCDctrl_bcd_hum,
+        i_bcd_valid     => DataConv_LCDctrl_bcd_valid,
+        o_bcd_busy      => DataConv_LCDctrl_bcd_busy,
+        o_lcd_start     => LCDCtrl_DISPdrv_start,
+        i_lcd_busy      => LCDCtrl_DISPdrv_busy,
+        o_lcd_rw        => LCDCtrl_DISPdrv_disp_rw,
+        o_lcd_rs        => LCDCtrl_DISPdrv_disp_rs,
+        o_lcd_data      => LCDCtrl_DISPdrv_disp_data
+    );
+
+    display_driver : entity gen.hd44780_driver(rtl)
+    generic map(
+        G_SYSTEM_CLOCK => C_SYS_CLK_FREQ,
+        G_BAUD_RATE    => C_HD44780_CLK_FREQ
+    )
+    port map(
+        i_sys_clk   => sys_clk,
+        i_sys_rst   => sys_rst_n,
+        i_start     => LCDCtrl_DISPdrv_start,
+        o_busy      => LCDCtrl_DISPdrv_busy,
+        i_disp_rw   => LCDCtrl_DISPdrv_disp_rw,
+        i_disp_rs   => LCDCtrl_DISPdrv_disp_rs,
+        i_disp_data => LCDCtrl_DISPdrv_disp_data,
+        o_en        => en,
+        o_rw        => rw,
+        o_rs        => rs,
+        o_data      => lcd_data_out,
+        i_data      => lcd_data_in,
+        t_data      => lcd_data_tri
+    );
+    lcd_data <= lcd_data_out when lcd_data_tri = x"00" else x"ZZ";
+    lcd_data_in <= lcd_data;
+
 end struct;

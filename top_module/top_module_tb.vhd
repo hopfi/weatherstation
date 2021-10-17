@@ -37,14 +37,14 @@ begin
     dut : entity wstat.top_module(struct)
     port map 
     ( 
-        e       => e,
-        rw      => rw,
-        rs      => rs,
-        LED     => LED,
-        USR_BTN => USR_BTN,
-        data    => data,
-        CLK12M  => in_clk,
-        BUTTONS => BUTTONS
+        e          => e,
+        rw         => rw,
+        rs         => rs,
+        LED        => LED,
+        USR_BTN    => USR_BTN,
+        data       => data,
+        input_clk  => in_clk,
+        BUTTONS    => BUTTONS
     );
 
 
