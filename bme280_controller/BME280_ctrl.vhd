@@ -24,9 +24,9 @@ entity bme280_ctrl is
         i_clk               : in  std_logic;
         i_reset             : in  std_logic;
         i_start_measurement : in  std_logic;
-        o_bin_data_temp     : out std_logic_vector(20 downto 0);
-        o_bin_data_hum      : out std_logic_vector(20 downto 0);
-        o_bin_data_pres     : out std_logic_vector(20 downto 0);
+        o_bin_data_temp     : out std_logic_vector(19 downto 0);
+        o_bin_data_pres     : out std_logic_vector(19 downto 0);
+        o_bin_data_hum      : out std_logic_vector(15 downto 0);
         o_bin_data_valid    : out std_logic;
         o_en                : out std_logic;
         i_busy              : in  std_logic;
@@ -66,11 +66,12 @@ architecture rtl of bme280_ctrl is
         "01" & '0' & x"F3" & x"00", -- Start read register: status
         "01" & '1' & x"F3" & x"00", -- Read register: status
         "01" & '0' & x"F7" & x"00", -- Start read register: hum_lsb, hum_msb, temp_xlsb, temp_lsb, temp_msb, press_xlsb, press_lsb, press_msb
-        "01" & '1' & x"F7" & x"07" -- Read register: hum_lsb, hum_msb, temp_xlsb, temp_lsb, temp_msb, press_xlsb, press_lsb, press_msb
+        "01" & '1' & x"F7" & x"07"  -- Read register: hum_lsb, hum_msb, temp_xlsb, temp_lsb, temp_msb, press_xlsb, press_lsb, press_msb
     );
 
-    type rd_arr is array (natural range 0 to 8) of std_logic_vector(7 downto 0);
+    type rd_arr is array (natural range 0 to 7) of std_logic_vector(7 downto 0);
     signal read_arr : rd_arr := (others => (others => '0'));
+    --! content of read_arr: press_msb, press_lsb, press_xlsb, temp_msb, temp_lsb, temp_xlsb, hum_msb, hum_lsb
     
 
     signal ta_idx : integer range 0 to 255;
@@ -94,12 +95,22 @@ architecture rtl of bme280_ctrl is
 
     signal test_sig : integer range 0 to 7;
 
+    signal bin_data_temp     : std_logic_vector(19 downto 0);
+    signal bin_data_pres     : std_logic_vector(19 downto 0);
+    signal bin_data_hum      : std_logic_vector(15 downto 0);
+    signal bin_data_valid    : std_logic;
+
 begin
     o_en        <= en;
     o_stop_mode <= "00";
     o_wr_data   <= wr_data;
     o_wr_en     <= wr_en;
     o_rd_en     <= rd_en;
+
+    o_bin_data_temp  <= bin_data_temp;
+    o_bin_data_pres  <= bin_data_pres;
+    o_bin_data_hum   <= bin_data_hum;
+    o_bin_data_valid <= bin_data_valid;
 
     num_of_wr_data <= ta_arr(ta_idx)(18 downto 17);
     num_of_rd_data <= ta_arr(ta_idx)(7 downto 0);
@@ -114,9 +125,9 @@ begin
                 rd_en <= '0';
                 sending_r1 <= i_sending;
                 receiving_r1 <= i_receiving;
+                bin_data_valid <= '0';
 
-                --if i_start_measurement = '1' then
-                if i2c_start = '1' then
+                if i_start_measurement = '1' then
                     start_reg <= '1';
                 end if;
 
@@ -192,6 +203,11 @@ begin
 
                     when decide =>
                         if ta_idx = 8 then
+                            bin_data_temp  <= read_arr(3) & read_arr(4) & read_arr(5)(7 downto 4);
+                            bin_data_pres  <= read_arr(0) & read_arr(1) & read_arr(2)(7 downto 4);
+                            bin_data_hum   <= read_arr(6) & read_arr(7);
+                            bin_data_valid <= '1';
+
                             ta_idx <= 0;
                         else
                             ta_idx <= ta_idx + 1;
@@ -203,33 +219,6 @@ begin
                         null;
                 end case;
 
-
-            end if;
-        end if;
-    end process;
-    
-    process (i_clk)
-    begin
-        if rising_edge(i_clk) then
-            if i_reset = '1' then
-                cnt <= (others => '0');
-                cnt_en <= '1';
-                i2c_start <= '0';
-            else
-                i2c_start <= '0';
-                
-                --if i_busy = '0' then
-                --    cnt_en <= '1';
-                --end if;
-
-                if cnt_en = '1' then
-                    cnt <= cnt + 1;
-                    if cnt = x"2fff" then
-                        i2c_start <= '1';
-                        --cnt_en <= '0';
-                        cnt <= (others => '0');
-                    end if;
-                end if;
 
             end if;
         end if;
